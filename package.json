@@ -1,0 +1,18 @@
+{
+  "name": "tjpb-simulado-bd",
+  "version": "1.0.0",
+  "description": "Simulador Web Completo do Concurso TJPB 2026/2027 para Analista Judiciário - Banco de Dados (Banca FGV)",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "keywords": [
+    "tjpb",
+    "fgv",
+    "concurso",
+    "banco-de-dados",
+    "simulado"
+  ],
+  "author": "Candidato TJPB",
+  "license": "MIT"
+}

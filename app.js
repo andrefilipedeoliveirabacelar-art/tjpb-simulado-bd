@@ -2,26 +2,34 @@
 
 // Estado da Aplicação
 const AppState = {
-  mode: 'exam', // 'exam' (modo prova real) ou 'study' (modo treino com gabarito imediato)
+  mode: 'exam', // 'exam' (modo prova real) ou 'study' (modo treino com dicas e sem entrega de resposta imediata)
   currentQuestionIndex: 0,
   userAnswers: {}, // { [questionId]: selectedOptionIndex }
   flaggedQuestions: new Set(), // Set com ids marcados para revisão
+  studyRevealed: new Set(), // Set de ids de questões onde o gabarito completo foi revelado no Modo Treino
   examFinished: false,
   timerSeconds: 5 * 60 * 60, // 5 horas (18.000 segundos conforme item 10.1 do edital)
   timerInterval: null,
   discursivaTexto: "",
-  activeFilter: 'all', // 'all', 'portugues', 'rlm', 'especificas'
-  startTime: null
+  activeFilter: 'all', // 'all', 'portugues', 'rlm', 'especificas', 'flagged'
+  simuladoId: 1, // Número da edição atual do simulado
+  cadernoTipo: "Tipo 1 - Branca", // Caderno oficial estilo FGV
+  simuladosHistorico: [], // Lista de simulados já realizados
+  activeQuestions: [] // Array de questões em vigor no simulado atual
 };
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
   loadFromLocalStorage();
+  if (!AppState.activeQuestions || AppState.activeQuestions.length === 0) {
+    AppState.activeQuestions = JSON.parse(JSON.stringify(QUESTIONS_DATA));
+  }
   renderQuestionNav();
   renderCurrentQuestion();
   renderGabaritoGrid();
   renderPegadinhas();
   renderDiscursiva();
+  renderHistoricoSimulados();
   initTimer();
   updateProgressUI();
   setupEventListeners();
@@ -45,9 +53,10 @@ function setupEventListeners() {
       AppState.mode = e.target.value;
       saveToLocalStorage();
       renderCurrentQuestion();
+      renderGabaritoGrid();
       const alertMsg = AppState.mode === 'study' 
-        ? "Modo Treino Ativado: Você verá o gabarito comentado e as pegadinhas da banca instantaneamente!"
-        : "Modo Prova Real Ativado: Sem gabarito imediato. Suas respostas serão avaliadas ao final das 60 questões!";
+        ? "💡 Modo Treino Ativado: Ao responder, o sistema dirá na hora se acertou ou errou e dará dicas técnicas sem entregar a resposta de primeira!"
+        : "⏱️ Modo Prova Real Ativado: Sem gabarito ou dicas imediatas. Suas respostas serão avaliadas ao final das 60 questões!";
       showToast(alertMsg);
     });
   });
@@ -58,10 +67,10 @@ function setupEventListeners() {
     filterSelect.addEventListener('change', (e) => {
       AppState.activeFilter = e.target.value;
       renderQuestionNav();
-      // Encontra a primeira questão do filtro
       const filtered = getFilteredQuestions();
       if (filtered.length > 0) {
-        goToQuestion(filtered[0].id - 1);
+        const firstIdx = AppState.activeQuestions.findIndex(q => q.id === filtered[0].id);
+        if (firstIdx !== -1) goToQuestion(firstIdx);
       }
     });
   }
@@ -83,17 +92,22 @@ function switchMainTab(targetId) {
     }
   });
 
+  if (targetId === 'tab-historico') {
+    renderHistoricoSimulados();
+  }
+
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // Filtro de Questões
 function getFilteredQuestions() {
-  if (AppState.activeFilter === 'all') return QUESTIONS_DATA;
-  if (AppState.activeFilter === 'portugues') return QUESTIONS_DATA.filter(q => q.subject === 'Língua Portuguesa');
-  if (AppState.activeFilter === 'rlm') return QUESTIONS_DATA.filter(q => q.subject === 'Raciocínio Lógico-Matemático');
-  if (AppState.activeFilter === 'especificas') return QUESTIONS_DATA.filter(q => q.subject !== 'Língua Portuguesa' && q.subject !== 'Raciocínio Lógico-Matemático');
-  if (AppState.activeFilter === 'flagged') return QUESTIONS_DATA.filter(q => AppState.flaggedQuestions.has(q.id));
-  return QUESTIONS_DATA;
+  const list = AppState.activeQuestions;
+  if (AppState.activeFilter === 'all') return list;
+  if (AppState.activeFilter === 'portugues') return list.filter(q => q.subject === 'Língua Portuguesa');
+  if (AppState.activeFilter === 'rlm') return list.filter(q => q.subject === 'Raciocínio Lógico-Matemático');
+  if (AppState.activeFilter === 'especificas') return list.filter(q => q.subject !== 'Língua Portuguesa' && q.subject !== 'Raciocínio Lógico-Matemático');
+  if (AppState.activeFilter === 'flagged') return list.filter(q => AppState.flaggedQuestions.has(q.id));
+  return list;
 }
 
 // Renderiza a navegação superior por bolinhas/números
@@ -104,7 +118,7 @@ function renderQuestionNav() {
   container.innerHTML = '';
   const filtered = getFilteredQuestions();
 
-  QUESTIONS_DATA.forEach((q, idx) => {
+  AppState.activeQuestions.forEach((q, idx) => {
     const isFilteredIn = filtered.some(fq => fq.id === q.id);
     if (!isFilteredIn) return;
 
@@ -112,7 +126,6 @@ function renderQuestionNav() {
     btn.textContent = q.id;
     btn.dataset.index = idx;
     
-    // Classes de status
     const isCurrent = AppState.currentQuestionIndex === idx;
     const isAnswered = AppState.userAnswers[q.id] !== undefined;
     const isFlagged = AppState.flaggedQuestions.has(q.id);
@@ -128,12 +141,19 @@ function renderQuestionNav() {
       if (!isAnswered) {
         baseClass += "bg-slate-200 text-slate-500 border border-slate-300";
       } else if (isCorrect) {
-        baseClass += "bg-emerald-600 text-white shadow-sm";
+        baseClass += "bg-emerald-600 text-white shadow-xs";
       } else {
-        baseClass += "bg-rose-500 text-white shadow-sm";
+        baseClass += "bg-rose-500 text-white shadow-xs";
       }
     } else {
-      if (isAnswered) {
+      if (AppState.mode === 'study' && isAnswered) {
+        const isRight = AppState.userAnswers[q.id] === q.correct;
+        if (isRight) {
+          baseClass += "bg-emerald-600 text-white shadow-xs";
+        } else {
+          baseClass += "bg-rose-500 text-white shadow-xs";
+        }
+      } else if (isAnswered) {
         baseClass += "bg-blue-600 text-white hover:bg-blue-700";
       } else {
         baseClass += "bg-white text-slate-700 border border-slate-300 hover:bg-slate-100";
@@ -154,16 +174,15 @@ function renderQuestionNav() {
 
 // Navegar para questão específica
 function goToQuestion(index) {
-  if (index < 0 || index >= QUESTIONS_DATA.length) return;
+  if (index < 0 || index >= AppState.activeQuestions.length) return;
   AppState.currentQuestionIndex = index;
   renderQuestionNav();
   renderCurrentQuestion();
   updateProgressUI();
 }
 
-// Próxima e Anterior
 function nextQuestion() {
-  if (AppState.currentQuestionIndex < QUESTIONS_DATA.length - 1) {
+  if (AppState.currentQuestionIndex < AppState.activeQuestions.length - 1) {
     goToQuestion(AppState.currentQuestionIndex + 1);
   }
 }
@@ -176,7 +195,7 @@ function prevQuestion() {
 
 // Marcar/Desmarcar Dúvida
 function toggleFlagCurrentQuestion() {
-  const currentQ = QUESTIONS_DATA[AppState.currentQuestionIndex];
+  const currentQ = AppState.activeQuestions[AppState.currentQuestionIndex];
   if (AppState.flaggedQuestions.has(currentQ.id)) {
     AppState.flaggedQuestions.delete(currentQ.id);
   } else {
@@ -191,8 +210,20 @@ function toggleFlagCurrentQuestion() {
 function selectOption(optionIndex) {
   if (AppState.examFinished && AppState.mode === 'exam') return;
 
-  const currentQ = QUESTIONS_DATA[AppState.currentQuestionIndex];
+  const currentQ = AppState.activeQuestions[AppState.currentQuestionIndex];
+  
+  // No modo treino, se já revelou o gabarito oficial completo e acertou, não precisa reprocessar a não ser por retry
+  if (AppState.mode === 'study' && AppState.studyRevealed.has(currentQ.id) && AppState.userAnswers[currentQ.id] === currentQ.correct) {
+    return;
+  }
+
   AppState.userAnswers[currentQ.id] = optionIndex;
+  
+  // No modo estudo: se acertou, marca como revelado automaticamente
+  if (AppState.mode === 'study' && optionIndex === currentQ.correct) {
+    AppState.studyRevealed.add(currentQ.id);
+  }
+
   saveToLocalStorage();
   renderCurrentQuestion();
   renderQuestionNav();
@@ -200,49 +231,94 @@ function selectOption(optionIndex) {
   updateProgressUI();
 }
 
+// Tentar novamente a mesma questão no Modo Treino
+function tentarNovamenteQuestao(qId) {
+  delete AppState.userAnswers[qId];
+  AppState.studyRevealed.delete(qId);
+  saveToLocalStorage();
+  renderCurrentQuestion();
+  renderQuestionNav();
+  renderGabaritoGrid();
+  updateProgressUI();
+  showToast("Tentativa resetada! Leia a dica com atenção e escolha outra opção.");
+}
+
+// Forçar revelação do gabarito completo no Modo Treino
+function forcarRevelarGabarito(qId) {
+  AppState.studyRevealed.add(qId);
+  saveToLocalStorage();
+  renderCurrentQuestion();
+  renderQuestionNav();
+  renderGabaritoGrid();
+}
+
 // Renderiza o corpo da questão atual
 function renderCurrentQuestion() {
   const container = document.getElementById('current-question-card');
   if (!container) return;
 
-  const q = QUESTIONS_DATA[AppState.currentQuestionIndex];
+  const q = AppState.activeQuestions[AppState.currentQuestionIndex];
   const selectedOpt = AppState.userAnswers[q.id];
   const isFlagged = AppState.flaggedQuestions.has(q.id);
-  const showFeedback = AppState.mode === 'study' || AppState.examFinished;
+  const isAnswered = selectedOpt !== undefined;
+  const isCorrect = isAnswered && selectedOpt === q.correct;
+  const isRevealed = AppState.studyRevealed.has(q.id) || AppState.examFinished;
 
   let badgeColor = "bg-blue-100 text-blue-800";
   if (q.subject === "Língua Portuguesa") badgeColor = "bg-emerald-100 text-emerald-800";
   if (q.subject === "Raciocínio Lógico-Matemático") badgeColor = "bg-purple-100 text-purple-800";
   if (q.subject === "Banco de Dados") badgeColor = "bg-indigo-100 text-indigo-800";
 
+  // Montagem das opções
   let optionsHtml = q.options.map((opt, idx) => {
     let optClasses = "p-3.5 sm:p-4 rounded-xl border text-sm sm:text-base cursor-pointer transition-all flex items-start gap-3 relative ";
     const isChosen = selectedOpt === idx;
     const isRight = q.correct === idx;
+    const letter = String.fromCharCode(65 + idx);
+    let iconIndicator = "";
 
-    if (showFeedback) {
+    if (AppState.examFinished) {
+      // Exame Concluído: Mostra gabarito final
       if (isRight) {
         optClasses += "border-emerald-500 bg-emerald-50 text-emerald-950 font-medium ";
+        iconIndicator = `<span class="ml-auto text-emerald-600 font-bold flex items-center text-xs sm:text-sm gap-1">✓ Correta</span>`;
       } else if (isChosen && !isRight) {
         optClasses += "border-rose-500 bg-rose-50 text-rose-950 ";
+        iconIndicator = `<span class="ml-auto text-rose-600 font-bold flex items-center text-xs sm:text-sm gap-1">✕ Sua Opção</span>`;
       } else {
         optClasses += "border-slate-200 bg-white/60 text-slate-600 opacity-80 ";
       }
+    } else if (AppState.mode === 'study') {
+      // MODO TREINO (Comportamento Pedagógico Solicitado)
+      if (!isAnswered) {
+        // Ainda não respondeu: neutro
+        optClasses += "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-slate-700 ";
+      } else if (isCorrect || isRevealed) {
+        // Acertou ou pediu para revelar: mostra a correta em verde
+        if (isRight) {
+          optClasses += "border-emerald-500 bg-emerald-50 text-emerald-950 font-medium ring-1 ring-emerald-500 ";
+          iconIndicator = `<span class="ml-auto text-emerald-600 font-bold flex items-center text-xs sm:text-sm gap-1">✓ Correta</span>`;
+        } else if (isChosen && !isRight) {
+          optClasses += "border-rose-500 bg-rose-50 text-rose-950 ";
+          iconIndicator = `<span class="ml-auto text-rose-600 font-bold flex items-center text-xs sm:text-sm gap-1">✕ Sua Opção</span>`;
+        } else {
+          optClasses += "border-slate-200 bg-white/60 text-slate-600 opacity-80 ";
+        }
+      } else {
+        // ERROU E AINDA NÃO REVELOU: Destaca APENAS a que ele escolheu em vermelho; NÃO entrega qual é a certa!
+        if (isChosen) {
+          optClasses += "border-rose-500 bg-rose-50 text-rose-950 font-medium ring-1 ring-rose-500 ";
+          iconIndicator = `<span class="ml-auto text-rose-600 font-bold flex items-center text-xs sm:text-sm gap-1">✕ Opção Incorreta</span>`;
+        } else {
+          optClasses += "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-slate-700 ";
+        }
+      }
     } else {
+      // MODO PROVA REAL: Apenas marca a opção escolhida pelo candidato sem pistas
       if (isChosen) {
-        optClasses += "border-blue-600 bg-blue-50/70 text-blue-900 font-medium shadow-sm ring-1 ring-blue-600 ";
+        optClasses += "border-blue-600 bg-blue-50/70 text-blue-900 font-medium shadow-xs ring-1 ring-blue-600 ";
       } else {
         optClasses += "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-slate-700 ";
-      }
-    }
-
-    const letter = String.fromCharCode(65 + idx);
-    let iconIndicator = "";
-    if (showFeedback) {
-      if (isRight) {
-        iconIndicator = `<span class="ml-auto text-emerald-600 font-bold flex items-center text-xs sm:text-sm gap-1">✓ Correta</span>`;
-      } else if (isChosen && !isRight) {
-        iconIndicator = `<span class="ml-auto text-rose-600 font-bold flex items-center text-xs sm:text-sm gap-1">✕ Sua Opção</span>`;
       }
     }
 
@@ -259,27 +335,101 @@ function renderCurrentQuestion() {
     `;
   }).join('');
 
-  // Seção de feedback / pegadinha / comentários
-  let explanationHtml = "";
-  if (showFeedback && selectedOpt !== undefined) {
-    explanationHtml = `
-      <div class="mt-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-blue-50/40 border border-blue-100 fade-in">
-        <div class="flex items-center gap-2 mb-2 text-blue-800 font-bold text-sm sm:text-base">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          Comentário do Especialista & Fundamentação Teórica
-        </div>
-        <p class="text-sm text-slate-700 leading-relaxed whitespace-pre-line mb-4 font-normal">
-          ${q.explanation}
-        </p>
+  // Seção de Feedback do Modo Treino / Exame
+  let feedbackHtml = "";
 
-        <div class="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/80 flex items-start gap-2.5">
-          <span class="text-amber-600 font-bold text-lg shrink-0">⚠️</span>
-          <div>
-            <div class="text-xs font-bold uppercase tracking-wider text-amber-800">Raio-X da Pegadinha FGV:</div>
-            <div class="text-xs sm:text-sm text-amber-900 mt-0.5 leading-relaxed font-medium">
-              ${q.pegadinha}
+  if (AppState.mode === 'study' && isAnswered) {
+    const chosenLetter = String.fromCharCode(65 + selectedOpt);
+
+    if (isCorrect) {
+      // Acertou na hora!
+      feedbackHtml = `
+        <div class="mt-6 p-5 rounded-2xl bg-emerald-50 border-2 border-emerald-300 text-emerald-950 fade-in shadow-xs">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-3xl">🎉</span>
+            <div>
+              <div class="font-black text-base text-emerald-900">RESPOSTA CORRETA! Parabéns!</div>
+              <div class="text-xs text-emerald-800">Você acertou a questão #${q.id} (Alternativa ${chosenLetter}).</div>
             </div>
           </div>
+          
+          <div class="mt-4 pt-3 border-t border-emerald-200 text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+            <div class="font-bold text-slate-900 mb-1">Fundamentação Técnica Oficial:</div>
+            ${q.explanation}
+          </div>
+
+          <div class="mt-4 p-3 rounded-xl bg-amber-50/90 border border-amber-200 text-xs sm:text-sm text-amber-900">
+            <strong class="text-amber-800 uppercase tracking-wider text-[11px] block">Raio-X da Pegadinha FGV:</strong>
+            ${q.pegadinha}
+          </div>
+        </div>
+      `;
+    } else if (!isRevealed) {
+      // Errou na hora! Dá dicas e permite tentar novamente
+      feedbackHtml = `
+        <div class="mt-6 p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 fade-in shadow-xs">
+          <div class="flex items-start gap-3">
+            <span class="text-3xl">💡</span>
+            <div class="flex-1">
+              <div class="flex items-center justify-between flex-wrap gap-2">
+                <span class="font-black text-xs sm:text-sm uppercase tracking-wide text-rose-700 bg-rose-100 px-3 py-1 rounded-md border border-rose-200">
+                  ✕ Resposta Incorreta (Alternativa ${chosenLetter})
+                </span>
+                <span class="text-xs font-bold text-amber-800">Tente novamente antes de ver a resposta!</span>
+              </div>
+
+              <!-- Dica da Questão -->
+              <div class="mt-3.5 p-4 bg-white/90 rounded-xl border border-amber-200 shadow-xs">
+                <div class="text-xs font-black uppercase text-amber-900 mb-1 flex items-center gap-1.5">
+                  <span>🎯</span> Dica Técnica da Questão & Pista da FGV:
+                </div>
+                <p class="text-xs sm:text-sm text-slate-800 font-medium leading-relaxed">
+                  ${q.dica || 'Analise atentamente as palavras-chave do enunciado e as pegadinhas conceituais deste tópico.'}
+                </p>
+              </div>
+
+              <!-- Ações: Tentar novamente ou Desistir -->
+              <div class="mt-4 flex flex-wrap items-center gap-3">
+                <button onclick="tentarNovamenteQuestao(${q.id})" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-sm transition-all">
+                  <span>🔄</span> Tentar Outra Alternativa
+                </button>
+                <button onclick="forcarRevelarGabarito(${q.id})" class="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all">
+                  <span>👁️</span> Desistir e Ver Gabarito Completo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      // Usuário errou e clicou em desistir/revelar
+      feedbackHtml = `
+        <div class="mt-6 p-5 rounded-2xl bg-slate-50 border border-slate-300 text-slate-800 fade-in shadow-xs">
+          <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-200">
+            <div class="font-bold text-slate-900 text-sm">Gabarito Revelado: Alternativa ${String.fromCharCode(65 + q.correct)}</div>
+            <button onclick="tentarNovamenteQuestao(${q.id})" class="text-xs text-blue-600 font-bold hover:underline">
+              Resetar para tentar de novo
+            </button>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line mb-3">
+            ${q.explanation}
+          </p>
+          <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs sm:text-sm text-amber-900">
+            <strong>Pegadinha FGV:</strong> ${q.pegadinha}
+          </div>
+        </div>
+      `;
+    }
+  } else if (AppState.examFinished && isAnswered) {
+    // Exame finalizado: feedback completo
+    feedbackHtml = `
+      <div class="mt-6 p-5 rounded-2xl bg-slate-50 border border-slate-200 fade-in">
+        <div class="font-bold text-slate-900 text-sm mb-2">Comentário Oficial da Questão:</div>
+        <p class="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line mb-3">
+          ${q.explanation}
+        </p>
+        <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+          <strong>Pegadinha da FGV:</strong> ${q.pegadinha}
         </div>
       </div>
     `;
@@ -294,6 +444,9 @@ function renderCurrentQuestion() {
           </span>
           <span class="text-xs text-slate-500 font-medium">
             Tópico: <strong class="text-slate-700">${q.topic}</strong>
+          </span>
+          <span class="text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
+            ${AppState.cadernoTipo}
           </span>
         </div>
         <div class="flex items-center gap-2">
@@ -315,7 +468,7 @@ function renderCurrentQuestion() {
         ${optionsHtml}
       </div>
 
-      ${explanationHtml}
+      ${feedbackHtml}
 
       <div class="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
         <button onclick="prevQuestion()" ${AppState.currentQuestionIndex === 0 ? 'disabled' : ''} class="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
@@ -324,7 +477,7 @@ function renderCurrentQuestion() {
         <span class="text-xs text-slate-400 hidden sm:inline">
           Use as setas ou clique nas bolinhas acima
         </span>
-        <button onclick="nextQuestion()" ${AppState.currentQuestionIndex === QUESTIONS_DATA.length - 1 ? 'disabled' : ''} class="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm">
+        <button onclick="nextQuestion()" ${AppState.currentQuestionIndex === AppState.activeQuestions.length - 1 ? 'disabled' : ''} class="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-xs">
           Próxima →
         </button>
       </div>
@@ -338,7 +491,7 @@ function renderGabaritoGrid() {
   if (!container) return;
 
   let html = '';
-  QUESTIONS_DATA.forEach(q => {
+  AppState.activeQuestions.forEach(q => {
     const selected = AppState.userAnswers[q.id];
     let bolhas = ['A', 'B', 'C', 'D', 'E'].map((letter, optIdx) => {
       let bolhaClass = "gabarito-bolha ";
@@ -363,34 +516,234 @@ function renderGabaritoGrid() {
   container.innerHTML = html;
 }
 
-// Renderiza a Seção de Pegadinhas FGV
-function renderPegadinhas() {
-  const container = document.getElementById('pegadinhas-container');
-  if (!container) return;
+// ========================================================
+// GERADOR DINÂMICO DE NOVO SIMULADO & HISTÓRICO
+// ========================================================
 
-  container.innerHTML = PEGANHAS_FGV_DATA.map((peg, i) => `
-    <div class="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow">
-      <div class="flex items-start gap-3">
-        <span class="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 font-bold flex items-center justify-center shrink-0 text-sm">
-          ${i + 1}
-        </span>
-        <div class="flex-1">
-          <h3 class="text-base font-bold text-slate-900 mb-1">
-            ${peg.tema}
-          </h3>
-          <p class="text-sm text-slate-600 mb-3 leading-relaxed">
-            ${peg.descricao}
-          </p>
-          <div class="p-3 rounded-xl bg-blue-50/70 border border-blue-200/60 text-xs sm:text-sm text-blue-900">
-            <strong class="text-blue-800">Antídoto / Como não errar:</strong> ${peg.comoEvitar}
-          </div>
-        </div>
-      </div>
-    </div>
-  `).join('');
+const CADERNOS_FGV = [
+  "Tipo 1 - Branca",
+  "Tipo 2 - Verde",
+  "Tipo 3 - Amarela",
+  "Tipo 4 - Azul"
+];
+
+function confirmarGerarNovoSimulado() {
+  const answeredCount = Object.keys(AppState.userAnswers).length;
+  if (answeredCount > 0 && !AppState.examFinished) {
+    const saveCurrent = confirm(`Você respondeu ${answeredCount} questões no simulado atual. Deseja finalizar e registrar a pontuação atual no seu Histórico antes de iniciar o novo simulado?`);
+    if (saveCurrent) {
+      registrarSimuladoNoHistorico();
+    }
+  }
+
+  gerarNovoSimulado();
 }
 
-// Renderiza a Seção da Prova Discursiva
+function gerarNovoSimulado() {
+  // Escolher novo tipo de caderno
+  const novoTipo = CADERNOS_FGV[Math.floor(Math.random() * CADERNOS_FGV.length)];
+  AppState.cadernoTipo = novoTipo;
+  AppState.simuladoId = (AppState.simuladosHistorico.length || 0) + 1;
+
+  // Embaralhar opções e posições das questões
+  // Copia o banco original
+  const rawCopy = JSON.parse(JSON.stringify(QUESTIONS_DATA));
+
+  // Embaralha dentro de blocos para manter a estrutura oficial do Edital:
+  // Questões 1 a 10: Português
+  // Questões 11 a 20: RLM
+  // Questões 21 a 60: Específicas Banco de Dados
+  const portugues = shuffleArray(rawCopy.filter(q => q.subject === 'Língua Portuguesa'));
+  const rlm = shuffleArray(rawCopy.filter(q => q.subject === 'Raciocínio Lógico-Matemático'));
+  const especificas = shuffleArray(rawCopy.filter(q => q.subject !== 'Língua Portuguesa' && q.subject !== 'Raciocínio Lógico-Matemático'));
+
+  const novoConjunto = [...portugues, ...rlm, ...especificas];
+
+  // Embaralha as 5 opções (A, B, C, D, E) de cada questão e recalcula o 'correct'
+  novoConjunto.forEach((q, newIndex) => {
+    q.id = newIndex + 1;
+
+    // Extrair texto limpo das opções
+    const originalCorrectText = q.options[q.correct].replace(/^[A-E]\)\s*/, '');
+    const cleanOptions = q.options.map(opt => opt.replace(/^[A-E]\)\s*/, ''));
+    
+    // Embaralha as opções
+    const shuffledClean = shuffleArray(cleanOptions);
+    
+    // Identifica o novo índice da opção correta
+    const newCorrectIdx = shuffledClean.findIndex(t => t === originalCorrectText);
+    q.correct = newCorrectIdx !== -1 ? newCorrectIdx : 0;
+
+    // Remonta com os prefixos A), B), C), D), E)
+    q.options = shuffledClean.map((text, idx) => `${String.fromCharCode(65 + idx)}) ${text}`);
+  });
+
+  AppState.activeQuestions = novoConjunto;
+  AppState.userAnswers = {};
+  AppState.flaggedQuestions.clear();
+  AppState.studyRevealed.clear();
+  AppState.examFinished = false;
+  AppState.timerSeconds = 5 * 60 * 60; // 5 horas
+  AppState.currentQuestionIndex = 0;
+
+  saveToLocalStorage();
+  renderQuestionNav();
+  renderCurrentQuestion();
+  renderGabaritoGrid();
+  renderHistoricoSimulados();
+  updateProgressUI();
+  switchMainTab('tab-simulado');
+
+  showToast(`🎉 Novo Simulado #${AppState.simuladoId} (${novoTipo}) gerado com sucesso! Questões e alternativas redistribuídas.`);
+}
+
+// Algoritmo de Fisher-Yates para embaralhamento seguro
+function shuffleArray(array) {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// Grava o simulado no histórico
+function registrarSimuladoNoHistorico() {
+  let acertos = 0;
+  AppState.activeQuestions.forEach(q => {
+    if (AppState.userAnswers[q.id] === q.correct) {
+      acertos++;
+    }
+  });
+
+  const percentual = ((acertos / 60) * 100).toFixed(1);
+  const dataFormatada = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+
+  // Tempo gasto
+  const tempoGastoSegundos = (5 * 60 * 60) - AppState.timerSeconds;
+  const hGasto = Math.floor(tempoGastoSegundos / 3600);
+  const mGasto = Math.floor((tempoGastoSegundos % 3600) / 60);
+  const tempoStr = `${String(hGasto).padStart(2, '0')}h ${String(mGasto).padStart(2, '0')}m`;
+
+  let statusStr = "Não Habilitado";
+  if (acertos >= 36) statusStr = "Habilitado (Ampla)";
+  else if (acertos >= 29) statusStr = "Habilitado (Cotas)";
+
+  const novoRegistro = {
+    id: AppState.simuladosHistorico.length + 1,
+    data: dataFormatada,
+    caderno: AppState.cadernoTipo,
+    acertos: acertos,
+    percentual: `${percentual}%`,
+    tempoGasto: tempoStr,
+    status: statusStr
+  };
+
+  AppState.simuladosHistorico.unshift(novoRegistro);
+  saveToLocalStorage();
+  renderHistoricoSimulados();
+}
+
+// Renderiza a tabela e métricas na aba Histórico
+function renderHistoricoSimulados() {
+  const countHeader = document.getElementById('header-simulados-count');
+  const countNav = document.getElementById('nav-simulados-count');
+  const countHist = document.getElementById('hist-total-count');
+  const mediaPontos = document.getElementById('hist-media-pontos');
+  const melhorNota = document.getElementById('hist-melhor-nota');
+  const taxaHab = document.getElementById('hist-taxa-hab');
+  const tableBody = document.getElementById('historico-table-body');
+
+  const total = AppState.simuladosHistorico.length;
+  if (countHeader) countHeader.textContent = total;
+  if (countNav) countNav.textContent = total;
+  if (countHist) countHist.textContent = total;
+
+  if (total === 0) {
+    if (mediaPontos) mediaPontos.innerHTML = `0 <span class="text-sm font-normal">/ 60</span>`;
+    if (melhorNota) melhorNota.innerHTML = `0 <span class="text-sm font-normal">/ 60</span>`;
+    if (taxaHab) taxaHab.textContent = `0%`;
+    if (tableBody) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="7" class="p-6 text-center text-slate-400">
+            Nenhum simulado finalizado ainda. Conclua sua prova e clique em "Finalizar Prova" para gravar seu primeiro simulado!
+          </td>
+        </tr>
+      `;
+    }
+    return;
+  }
+
+  // Cálculos consolidados
+  const somaPontos = AppState.simuladosHistorico.reduce((acc, cur) => acc + cur.acertos, 0);
+  const media = (somaPontos / total).toFixed(1);
+  const maxNota = Math.max(...AppState.simuladosHistorico.map(h => h.acertos));
+  const habilitados = AppState.simuladosHistorico.filter(h => h.acertos >= 36).length;
+  const taxa = Math.round((habilitados / total) * 100);
+
+  if (mediaPontos) mediaPontos.innerHTML = `${media} <span class="text-sm font-normal">/ 60</span>`;
+  if (melhorNota) melhorNota.innerHTML = `${maxNota} <span class="text-sm font-normal">/ 60</span>`;
+  if (taxaHab) taxaHab.textContent = `${taxa}%`;
+
+  if (tableBody) {
+    tableBody.innerHTML = AppState.simuladosHistorico.map(sim => {
+      let badgeStatus = "bg-rose-100 text-rose-800";
+      if (sim.status === "Habilitado (Ampla)") badgeStatus = "bg-emerald-100 text-emerald-800 font-bold";
+      else if (sim.status === "Habilitado (Cotas)") badgeStatus = "bg-blue-100 text-blue-800 font-bold";
+
+      return `
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="p-3 font-bold text-slate-900">Simulado #${sim.id}</td>
+          <td class="p-3 text-slate-600">${sim.data}</td>
+          <td class="p-3 font-medium text-slate-700">${sim.caderno}</td>
+          <td class="p-3 font-mono font-bold text-blue-700 text-sm">${sim.acertos} / 60</td>
+          <td class="p-3 font-bold text-slate-800">${sim.percentual}</td>
+          <td class="p-3 font-mono text-slate-600">${sim.tempoGasto}</td>
+          <td class="p-3">
+            <span class="px-2.5 py-1 rounded-md text-xs ${badgeStatus}">
+              ${sim.status}
+            </span>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+}
+
+function limparHistoricoSimulados() {
+  if (confirm("Deseja realmente limpar todo o histórico de simulados realizados?")) {
+    AppState.simuladosHistorico = [];
+    saveToLocalStorage();
+    renderHistoricoSimulados();
+    showToast("Histórico de simulados limpo!");
+  }
+}
+
+// Finalizar Simulado e Gerar Diagnóstico
+function finalizarSimulado() {
+  const answeredCount = Object.keys(AppState.userAnswers).length;
+  if (!AppState.examFinished && answeredCount < AppState.activeQuestions.length) {
+    const confirmFinish = confirm(`Você respondeu ${answeredCount} das 60 questões. Deseja realmente finalizar e gerar seu diagnóstico agora?`);
+    if (!confirmFinish) return;
+  }
+
+  AppState.examFinished = true;
+  registrarSimuladoNoHistorico();
+  saveToLocalStorage();
+  renderQuestionNav();
+  renderCurrentQuestion();
+  renderGabaritoGrid();
+  updateProgressUI();
+
+  gerarRelatorioDiagnostico();
+  switchMainTab('tab-diagnostico');
+}
+
+// ========================================================
+// PROVA DISCURSIVA E LINHAS
+// ========================================================
+
 function renderDiscursiva() {
   const container = document.getElementById('discursiva-content-container');
   if (!container) return;
@@ -503,6 +856,8 @@ function initTimer() {
   }
 
   updateTimerDisplay();
+  if (AppState.timerInterval) clearInterval(AppState.timerInterval);
+
   AppState.timerInterval = setInterval(() => {
     if (AppState.timerSeconds > 0 && !AppState.examFinished) {
       AppState.timerSeconds--;
@@ -528,16 +883,16 @@ function updateTimerDisplay() {
   timerEl.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   
   if (AppState.timerSeconds <= 30 * 60) {
-    timerEl.className = "font-mono font-bold text-rose-600 animate-pulse";
+    timerEl.className = "font-mono font-bold text-rose-600 animate-pulse text-xs sm:text-sm";
   } else {
-    timerEl.className = "font-mono font-bold text-blue-700";
+    timerEl.className = "font-mono font-bold text-blue-700 text-xs sm:text-sm";
   }
 }
 
 // Atualiza barra de progresso e estatísticas rápidas
 function updateProgressUI() {
   const answeredCount = Object.keys(AppState.userAnswers).length;
-  const total = QUESTIONS_DATA.length;
+  const total = AppState.activeQuestions.length;
   const pct = Math.round((answeredCount / total) * 100);
 
   const progressBar = document.getElementById('overall-progress-bar');
@@ -552,36 +907,45 @@ function updateProgressUI() {
   }
 }
 
-// Finalizar Simulado e Gerar Diagnóstico
-function finalizarSimulado() {
-  const answeredCount = Object.keys(AppState.userAnswers).length;
-  if (!AppState.examFinished && answeredCount < QUESTIONS_DATA.length) {
-    const confirmFinish = confirm(`Você respondeu ${answeredCount} das 60 questões. Deseja realmente finalizar e gerar seu diagnóstico agora?`);
-    if (!confirmFinish) return;
-  }
+// Renderiza a Seção de Pegadinhas FGV
+function renderPegadinhas() {
+  const container = document.getElementById('pegadinhas-container');
+  if (!container) return;
 
-  AppState.examFinished = true;
-  saveToLocalStorage();
-  renderQuestionNav();
-  renderCurrentQuestion();
-  renderGabaritoGrid();
-  updateProgressUI();
-
-  // Exibir Diagnóstico e mudar para a aba de resultados
-  gerarRelatorioDiagnostico();
-  switchMainTab('tab-diagnostico');
+  container.innerHTML = PEGANHAS_FGV_DATA.map((peg, i) => `
+    <div class="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow">
+      <div class="flex items-start gap-3">
+        <span class="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 font-bold flex items-center justify-center shrink-0 text-sm">
+          ${i + 1}
+        </span>
+        <div class="flex-1">
+          <h3 class="text-base font-bold text-slate-900 mb-1">
+            ${peg.tema}
+          </h3>
+          <p class="text-sm text-slate-600 mb-3 leading-relaxed">
+            ${peg.descricao}
+          </p>
+          <div class="p-3 rounded-xl bg-blue-50/70 border border-blue-200/60 text-xs sm:text-sm text-blue-900">
+            <strong class="text-blue-800">Antídoto / Como não errar:</strong> ${peg.comoEvitar}
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
 }
 
-// Motor de Diagnóstico Inteligente por Assunto e Trilha de Estudos
+// ========================================================
+// DIAGNÓSTICO INTELIGENTE E RELATÓRIO
+// ========================================================
+
 function gerarRelatorioDiagnostico() {
   let acertosTotal = 0;
   let moduloGeraisAcertos = 0;
   let moduloEspecificosAcertos = 0;
 
-  // Agrupamento por tópicos para diagnóstico fino
   const topicosStats = {};
 
-  QUESTIONS_DATA.forEach(q => {
+  AppState.activeQuestions.forEach(q => {
     const userChoice = AppState.userAnswers[q.id];
     const isCorrect = userChoice === q.correct;
     if (isCorrect) acertosTotal++;
@@ -610,24 +974,17 @@ function gerarRelatorioDiagnostico() {
   const percentualGerais = ((moduloGeraisAcertos / 20) * 100).toFixed(1);
   const percentualEspecificos = ((moduloEspecificosAcertos / 40) * 100).toFixed(1);
 
-  // Regra de Aprovação do Edital (Item 10.12 - 60% mínimo da Objetiva = 36 pontos)
   const isAprovadoAmpla = acertosTotal >= 36;
-  // Item 10.12.1 - Cotas (20% inferior à nota mínima da ampla = 28,8 -> 29 pontos)
   const isAprovadoCotas = acertosTotal >= 29;
 
-  // Montagem do Relatório Visual
   const container = document.getElementById('diagnostico-results-container');
   if (!container) return;
 
-  // Identificação dos pontos fracos e fortes
-  const recomendacoes = [];
   const prioridadeAlta = [];
   const prioridadeMedia = [];
 
   Object.keys(topicosStats).forEach(subj => {
     const st = topicosStats[subj];
-    const taxa = (st.acertos / st.total) * 100;
-    
     Object.keys(st.subtopicos).forEach(subt => {
       const subInfo = st.subtopicos[subt];
       const subTaxa = (subInfo.acertos / subInfo.total) * 100;
@@ -776,62 +1133,8 @@ function gerarRelatorioDiagnostico() {
   `;
 }
 
-// Reset do Simulado
-function reiniciarSimulado() {
-  if (confirm("Deseja realmente reiniciar todo o simulado e limpar suas respostas?")) {
-    localStorage.removeItem('tjpb_user_answers');
-    localStorage.removeItem('tjpb_flagged');
-    localStorage.removeItem('tjpb_exam_finished');
-    localStorage.removeItem('tjpb_timer_seconds');
-    AppState.userAnswers = {};
-    AppState.flaggedQuestions.clear();
-    AppState.examFinished = false;
-    AppState.timerSeconds = 5 * 60 * 60;
-    AppState.currentQuestionIndex = 0;
-    
-    renderQuestionNav();
-    renderCurrentQuestion();
-    renderGabaritoGrid();
-    updateProgressUI();
-    switchMainTab('tab-simulado');
-    showToast("Simulado reiniciado com sucesso! Boa prova!");
-  }
-}
-
-// Salvar / Carregar no LocalStorage
-function saveToLocalStorage() {
-  localStorage.setItem('tjpb_user_answers', JSON.stringify(AppState.userAnswers));
-  localStorage.setItem('tjpb_flagged', JSON.stringify(Array.from(AppState.flaggedQuestions)));
-  localStorage.setItem('tjpb_exam_finished', AppState.examFinished);
-  localStorage.setItem('tjpb_sim_mode', AppState.mode);
-}
-
-function loadFromLocalStorage() {
-  const savedAnswers = localStorage.getItem('tjpb_user_answers');
-  if (savedAnswers) {
-    AppState.userAnswers = JSON.parse(savedAnswers);
-  }
-
-  const savedFlagged = localStorage.getItem('tjpb_flagged');
-  if (savedFlagged) {
-    AppState.flaggedQuestions = new Set(JSON.parse(savedFlagged));
-  }
-
-  const savedFinished = localStorage.getItem('tjpb_exam_finished');
-  if (savedFinished === 'true') {
-    AppState.examFinished = true;
-  }
-
-  const savedMode = localStorage.getItem('tjpb_sim_mode');
-  if (savedMode) {
-    AppState.mode = savedMode;
-    const radio = document.querySelector(`input[name="sim-mode"][value="${savedMode}"]`);
-    if (radio) radio.checked = true;
-  }
-}
-
 // ========================================================
-// CALCULADORA E SIMULADOR DE PROJEÇÃO DE VAGAS (TOP 1 AO 50)
+// CALCULADORA E SIMULADOR DE PROJEÇÃO DE VAGAS
 // ========================================================
 
 function atualizarCalculadoraProjecao() {
@@ -853,7 +1156,6 @@ function atualizarCalculadoraProjecao() {
   valDisc.textContent = notaDisc;
   valTotal.textContent = notaTotal.toFixed(1);
 
-  // Análise da Faixa de Corte
   if (notaObj < 36 || notaDisc < 24) {
     faixaBadge.className = "mt-2.5 inline-block px-3 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-800";
     faixaBadge.textContent = "Eliminado pelo Edital (Abaixo dos 60% Mínimos)";
@@ -890,7 +1192,7 @@ function atualizarCalculadoraProjecao() {
 
 function puxarNotaSimuladoParaCalculadora() {
   let acertos = 0;
-  QUESTIONS_DATA.forEach(q => {
+  AppState.activeQuestions.forEach(q => {
     if (AppState.userAnswers[q.id] === q.correct) {
       acertos++;
     }
@@ -901,6 +1203,62 @@ function puxarNotaSimuladoParaCalculadora() {
     inputObj.value = acertos;
     atualizarCalculadoraProjecao();
     showToast(`Nota do seu Simulado (${acertos} acertos na Objetiva) carregada na Calculadora de Projeção!`);
+  }
+}
+
+// Salvar / Carregar no LocalStorage
+function saveToLocalStorage() {
+  localStorage.setItem('tjpb_user_answers', JSON.stringify(AppState.userAnswers));
+  localStorage.setItem('tjpb_flagged', JSON.stringify(Array.from(AppState.flaggedQuestions)));
+  localStorage.setItem('tjpb_study_revealed', JSON.stringify(Array.from(AppState.studyRevealed)));
+  localStorage.setItem('tjpb_exam_finished', AppState.examFinished);
+  localStorage.setItem('tjpb_sim_mode', AppState.mode);
+  localStorage.setItem('tjpb_caderno_tipo', AppState.cadernoTipo);
+  localStorage.setItem('tjpb_simulados_historico', JSON.stringify(AppState.simuladosHistorico));
+  localStorage.setItem('tjpb_active_questions', JSON.stringify(AppState.activeQuestions));
+}
+
+function loadFromLocalStorage() {
+  const savedAnswers = localStorage.getItem('tjpb_user_answers');
+  if (savedAnswers) {
+    AppState.userAnswers = JSON.parse(savedAnswers);
+  }
+
+  const savedFlagged = localStorage.getItem('tjpb_flagged');
+  if (savedFlagged) {
+    AppState.flaggedQuestions = new Set(JSON.parse(savedFlagged));
+  }
+
+  const savedRevealed = localStorage.getItem('tjpb_study_revealed');
+  if (savedRevealed) {
+    AppState.studyRevealed = new Set(JSON.parse(savedRevealed));
+  }
+
+  const savedFinished = localStorage.getItem('tjpb_exam_finished');
+  if (savedFinished === 'true') {
+    AppState.examFinished = true;
+  }
+
+  const savedMode = localStorage.getItem('tjpb_sim_mode');
+  if (savedMode) {
+    AppState.mode = savedMode;
+    const radio = document.querySelector(`input[name="sim-mode"][value="${savedMode}"]`);
+    if (radio) radio.checked = true;
+  }
+
+  const savedCaderno = localStorage.getItem('tjpb_caderno_tipo');
+  if (savedCaderno) {
+    AppState.cadernoTipo = savedCaderno;
+  }
+
+  const savedHistorico = localStorage.getItem('tjpb_simulados_historico');
+  if (savedHistorico) {
+    AppState.simuladosHistorico = JSON.parse(savedHistorico);
+  }
+
+  const savedQuestions = localStorage.getItem('tjpb_active_questions');
+  if (savedQuestions) {
+    AppState.activeQuestions = JSON.parse(savedQuestions);
   }
 }
 

@@ -67,18 +67,31 @@
           </div>
         </div>
 
-        <!-- Cronômetro e Botão Finalizar -->
-        <div class="flex items-center gap-3 sm:gap-6">
+        <!-- Contador de Simulados, Gerador e Cronômetro -->
+        <div class="flex items-center gap-2 sm:gap-4 flex-wrap justify-end">
+          
+          <!-- Contador de Simulados Realizados -->
+          <div class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs font-bold text-indigo-900" title="Total de Simulados Realizados">
+            <span>📊</span>
+            <span>Simulados: <strong id="header-simulados-count" class="text-indigo-700">0</strong></span>
+          </div>
+
+          <!-- Botão Gerar Novo Simulado -->
+          <button onclick="confirmarGerarNovoSimulado()" class="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-xs shadow-xs transition-all flex items-center gap-1.5" title="Gera um novo caderno com questões e alternativas embaralhadas">
+            <span>🎲</span>
+            <span class="hidden md:inline">Gerar</span> Novo Simulado
+          </button>
+
           <!-- Cronômetro Regressivo (5 Horas) -->
-          <div class="bg-slate-100/80 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl border border-slate-200/80 flex items-center gap-2">
-            <span class="text-xs font-bold uppercase text-slate-400 hidden md:inline">Tempo:</span>
-            <div id="timer-display" class="font-mono font-bold text-sm sm:text-base text-blue-700">
+          <div class="bg-slate-100/80 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border border-slate-200/80 flex items-center gap-1.5">
+            <span class="text-xs font-bold uppercase text-slate-400 hidden lg:inline">Tempo:</span>
+            <div id="timer-display" class="font-mono font-bold text-xs sm:text-sm text-blue-700">
               05:00:00
             </div>
           </div>
 
           <!-- Botão Ação Finalizar / Diagnóstico -->
-          <button id="btn-finalizar-simulado" onclick="finalizarSimulado()" class="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white font-bold text-xs sm:text-sm shadow-sm transition-all flex items-center gap-2">
+          <button id="btn-finalizar-simulado" onclick="finalizarSimulado()" class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white font-bold text-xs sm:text-sm shadow-sm transition-all flex items-center gap-1.5">
             Finalizar Prova
           </button>
         </div>
@@ -102,8 +115,14 @@
         <button data-tab-target="tab-projecao" class="tab-button px-3.5 py-2 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap">
           🎯 Projeção de Vagas (Top 1 ao 50)
         </button>
+        <button data-tab-target="tab-historico" class="tab-button px-3.5 py-2 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap">
+          📜 Histórico de Simulados (<span id="nav-simulados-count">0</span>)
+        </button>
         <button data-tab-target="tab-diagnostico" class="tab-button px-3.5 py-2 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap">
           📊 Diagnóstico & Onde Melhorar
+        </button>
+        <button data-tab-target="tab-deploy" class="tab-button px-3.5 py-2 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap">
+          🚀 Publicar (GitHub & Vercel)
         </button>
         <button data-tab-target="tab-edital" class="tab-button px-3.5 py-2 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap">
           📜 Resumo do Edital & Salários
@@ -714,6 +733,160 @@
           <p class="text-xs sm:text-sm text-slate-700 leading-relaxed">
             "Definir estruturas de dados e ambientes de banco de dados, baseando-se nas diretrizes tecnológicas e nas metodologias adotadas pelo Tribunal de Justiça; monitorar o funcionamento das estruturas e ambientes de banco de dados, para garantir a disponibilidade de uso e a otimização da performance do ambiente, bem como assistir a equipe de desenvolvimento na implantação e na manutenção de sistemas, quanto à utilização dos recursos de banco de dados."
           </p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- ABA NOVA: HISTÓRICO DE SIMULADOS REALIZADOS -->
+    <!-- ======================================================== -->
+    <div id="tab-historico" class="tab-content-section hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+        
+        <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200">
+          <div>
+            <span class="px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800">
+              Acompanhamento Contínuo
+            </span>
+            <h2 class="text-2xl font-black text-slate-900 mt-2">
+              Histórico de Simulados Realizados & Evolução
+            </h2>
+            <p class="text-sm text-slate-600 mt-1">
+              Contabilização de todos os simulados completados para avaliar a curva de aprovação.
+            </p>
+          </div>
+          <button onclick="confirmarGerarNovoSimulado()" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm">
+            <span>🎲</span> Iniciar Novo Simulado
+          </button>
+        </div>
+
+        <!-- Cards com Estatísticas Gerais de Todos os Simulados -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+            <div class="text-xs uppercase font-bold text-slate-400">Total Concluídos</div>
+            <div id="hist-total-count" class="text-3xl font-black text-slate-800 mt-1">0</div>
+            <div class="text-xs text-slate-500 mt-0.5">Provas registradas</div>
+          </div>
+          <div class="p-4 rounded-2xl bg-blue-50/70 border border-blue-200">
+            <div class="text-xs font-bold uppercase text-blue-700">Média de Acertos</div>
+            <div id="hist-media-pontos" class="text-3xl font-black text-blue-900 mt-1">0 <span class="text-sm font-normal">/ 60</span></div>
+            <div class="text-xs text-blue-600 mt-0.5">Pontuação média</div>
+          </div>
+          <div class="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200">
+            <div class="text-xs font-bold uppercase text-emerald-700">Melhor Nota</div>
+            <div id="hist-melhor-nota" class="text-3xl font-black text-emerald-900 mt-1">0 <span class="text-sm font-normal">/ 60</span></div>
+            <div class="text-xs text-emerald-600 mt-0.5">Recorde pessoal</div>
+          </div>
+          <div class="p-4 rounded-2xl bg-purple-50/70 border border-purple-200">
+            <div class="text-xs font-bold uppercase text-purple-700">Taxa de Habilitação</div>
+            <div id="hist-taxa-hab" class="text-3xl font-black text-purple-900 mt-1">0%</div>
+            <div class="text-xs text-purple-600 mt-0.5">Simulados ≥ 36 acertos</div>
+          </div>
+        </div>
+
+        <!-- Tabela com os Simulados Realizados -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-base font-bold text-slate-900">
+              📋 Registro Detalhado dos Simulados
+            </h3>
+            <button onclick="limparHistoricoSimulados()" class="text-xs font-bold text-rose-600 hover:text-rose-800">
+              Limpar Histórico
+            </button>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs sm:text-sm text-left border-collapse border border-slate-200 rounded-xl overflow-hidden">
+              <thead class="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[11px]">
+                <tr>
+                  <th class="p-3 border-b border-slate-200"># Edição</th>
+                  <th class="p-3 border-b border-slate-200">Data e Hora</th>
+                  <th class="p-3 border-b border-slate-200">Caderno</th>
+                  <th class="p-3 border-b border-slate-200">Nota Objetiva</th>
+                  <th class="p-3 border-b border-slate-200">Aproveitamento</th>
+                  <th class="p-3 border-b border-slate-200">Tempo Gasto</th>
+                  <th class="p-3 border-b border-slate-200">Resultado Edital</th>
+                </tr>
+              </thead>
+              <tbody id="historico-table-body" class="divide-y divide-slate-200">
+                <!-- Preenchido via app.js -->
+                <tr>
+                  <td colspan="7" class="p-6 text-center text-slate-400">
+                    Nenhum simulado finalizado ainda. Conclua sua prova e clique em "Finalizar Prova" para gravar seu primeiro simulado!
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- ABA NOVA: GUIA DE DEPLOY (GITHUB & VERCEL) -->
+    <!-- ======================================================== -->
+    <div id="tab-deploy" class="tab-content-section hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+        
+        <div class="pb-4 border-b border-slate-200">
+          <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+            Hospedagem & Nuvem
+          </span>
+          <h2 class="text-2xl font-black text-slate-900 mt-2">
+            Como Publicar no GitHub e Hospedar Grátis na Vercel
+          </h2>
+          <p class="text-sm text-slate-600 mt-1">
+            Gere um link público (ex: <code class="bg-slate-100 text-blue-700 px-1.5 py-0.5 rounded font-mono">https://tjpb-simulado.vercel.app</code>) para acessar seu simulador no celular, tablet ou compartilhar com outros colegas de estudo!
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <!-- Passo 1: Subir no GitHub -->
+          <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+            <div class="flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-bold">1</span>
+              <h3 class="text-base font-bold text-slate-900">Subir no GitHub</h3>
+            </div>
+            <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              O projeto já é um repositório Git local totalmente commitado. Para conectar à sua conta do GitHub:
+            </p>
+            <div class="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs overflow-x-auto space-y-2">
+              <div class="text-slate-400"># 1. Acesse github.com/new e crie um repo: "tjpb-simulado-bd"</div>
+              <div class="text-emerald-400">git remote add origin https://github.com/SEU_USUARIO/tjpb-simulado-bd.git</div>
+              <div class="text-emerald-400">git branch -M main</div>
+              <div class="text-emerald-400">git push -u origin main</div>
+            </div>
+            <p class="text-xs text-slate-500">
+              *Se preferir usar o GitHub CLI (`gh`), basta rodar: <code class="font-bold text-slate-700">gh repo create tjpb-simulado-bd --public --source=. --push</code>
+            </p>
+          </div>
+
+          <!-- Passo 2: Hospedar na Vercel -->
+          <div class="p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-white border border-slate-800 space-y-4">
+            <div class="flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-blue-500 text-white flex items-center justify-center text-xs font-bold">2</span>
+              <h3 class="text-base font-bold text-white">Hospedar na Vercel (1 Clique)</h3>
+            </div>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              O arquivo <code class="text-blue-300 font-mono">vercel.json</code> já está gerado na pasta do projeto!
+            </p>
+            <div class="bg-black/50 border border-white/10 p-4 rounded-xl font-mono text-xs overflow-x-auto space-y-2">
+              <div class="text-slate-400"># Opção Rápida via Terminal:</div>
+              <div class="text-emerald-300">npx vercel --prod</div>
+              <div class="text-slate-400 mt-2"># Ou via Painel Web:</div>
+              <div class="text-blue-200">1. Acesse vercel.com e faça login</div>
+              <div class="text-blue-200">2. Clique em "Add New Project"</div>
+              <div class="text-blue-200">3. Importe o repo "tjpb-simulado-bd"</div>
+              <div class="text-emerald-300">4. Clique em "Deploy" -> PRONTO!</div>
+            </div>
+            <div class="p-3 bg-white/10 rounded-xl text-xs text-emerald-200 font-medium">
+              ✨ Seu link público com HTTPS automático estará online em segundos e atualiza sempre que você der git push!
+            </div>
+          </div>
+
         </div>
 
       </div>
