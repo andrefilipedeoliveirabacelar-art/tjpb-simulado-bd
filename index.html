@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador de Prova TJPB - Analista de Banco de Dados (FGV)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- Estilos Customizados -->
+  <link rel="stylesheet" href="style.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            tjpb: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+              950: '#172554',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col selection:bg-blue-600 selection:text-white">
+
+  <!-- TOAST DE NOTIFICAÇÕES -->
+  <div id="toast-notification" class="fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-xl bg-slate-900 text-white text-xs sm:text-sm font-semibold shadow-2xl transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-3 border border-slate-700 max-w-md">
+    Notificação
+  </div>
+
+  <!-- CABEÇALHO OFICIAL / TOPBAR -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 sm:h-20">
+        
+        <!-- Logo e Título do Concurso -->
+        <div class="flex items-center gap-3 sm:gap-4">
+          <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-tr from-blue-900 to-blue-700 flex items-center justify-center text-white font-black text-lg shadow-md shrink-0">
+            TJ
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                Edital Nº 01/2026
+              </span>
+              <span class="text-xs font-semibold text-slate-500 hidden sm:inline">
+                Banca: <strong>FGV Conhecimento</strong>
+              </span>
+            </div>
+            <h1 class="text-base sm:text-lg font-black text-slate-900 leading-tight">
+              TJPB • Analista Judiciário – Banco de Dados
+            </h1>
+          </div>
+        </div>
+
+        <!-- Cronômetro e Botão Finalizar -->
+        <div class="flex items-center gap-3 sm:gap-6">
+          <!-- Cronômetro Regressivo (5 Horas) -->
+          <div class="bg-slate-100/80 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl border border-slate-200/80 flex items-center gap-2">
+            <span class="text-xs font-bold uppercase text-slate-400 hidden md:inline">Tempo:</span>
+            <div id="timer-display" class="font-mono font-bold text-sm sm:text-base text-blue-700">
+              05:00:00
+            </div>
+          </div>
+
+          <!-- Botão Ação Finalizar / Diagnóstico -->
+          <button id="btn-finalizar-simulado" onclick="finalizarSimulado()" class="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white font-bold text-xs sm:text-sm shadow-sm transition-all flex items-center gap-2">
+            Finalizar Prova
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Barra de Navegação por Abas -->
+      <nav class="flex space-x-1 sm:space-x-2 border-t border-slate-100 overflow-x-auto py-1 scrollbar-none text-xs sm:text-sm">
+        <button data-tab-target="tab-simulado" class="tab-button px-3.5 py-2 rounded-lg font-semibold text-blue-700 bg-blue-50/60 border-b-2 border-blue-600 transition-colors whitespace-nowrap">
+          📝 Simulado da Prova (60 Questões)
+        </button>
+        <button data-tab-target="tab-discursiva" class="tab-button px-3.5 py-2 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap">
+          ✍️ Prova Discursiva (Estudo de Caso)
+        </button>
+        <button data-tab-target="tab-gabarito" class="tab-button px-3.5 py-2 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap">
+          📋 Folha Óptica de Respostas
+        </button>
+        <button data-tab-target="tab-pegadinhas" class="tab-button px-3.5 py-2 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap">
+          ⚠️ Raio-X & Pegadinhas FGV
+        </button>
+        <button data-tab-target="tab-projecao" class="tab-button px-3.5 py-2 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap">
+          🎯 Projeção de Vagas (Top 1 ao 50)
+        </button>
+        <button data-tab-target="tab-diagnostico" class="tab-button px-3.5 py-2 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap">
+          📊 Diagnóstico & Onde Melhorar
+        </button>
+        <button data-tab-target="tab-edital" class="tab-button px-3.5 py-2 rounded-lg font-medium text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap">
+          📜 Resumo do Edital & Salários
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- CONTEÚDO PRINCIPAL -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ======================================================== -->
+    <!-- ABA 1: SIMULADO DE QUESTÕES OBJETIVAS -->
+    <!-- ======================================================== -->
+    <div id="tab-simulado" class="tab-content-section space-y-6">
+
+      <!-- Seletor de Modo de Estudo e Barra de Progresso -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        
+        <!-- Toggle Modo de Simulação -->
+        <div class="flex items-center gap-3">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Modo de Estudo:</span>
+          <div class="inline-flex rounded-xl p-1 bg-slate-100 border border-slate-200 text-xs font-bold">
+            <label class="cursor-pointer px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 has-[:checked]:bg-white has-[:checked]:text-blue-700 has-[:checked]:shadow-xs text-slate-600">
+              <input type="radio" name="sim-mode" value="exam" checked class="hidden">
+              <span>⏱️ Prova Real (Sem Gabarito)</span>
+            </label>
+            <label class="cursor-pointer px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 has-[:checked]:bg-white has-[:checked]:text-blue-700 has-[:checked]:shadow-xs text-slate-600">
+              <input type="radio" name="sim-mode" value="study" class="hidden">
+              <span>💡 Modo Treino (Gabarito Imediato)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Filtro por Disciplina -->
+        <div class="flex items-center gap-3">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Filtrar:</span>
+          <select id="filter-subject" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-blue-600">
+            <option value="all">Todas as 60 Questões</option>
+            <option value="portugues">Língua Portuguesa (1 a 10)</option>
+            <option value="rlm">Raciocínio Lógico (11 a 20)</option>
+            <option value="especificas">Conhecimentos Específicos TI/BD (21 a 60)</option>
+            <option value="flagged">★ Apenas Marcadas para Revisar</option>
+          </select>
+          <button onclick="reiniciarSimulado()" title="Limpar respostas e reiniciar" class="px-2.5 py-1.5 rounded-xl border border-slate-200 text-slate-500 hover:text-rose-600 hover:border-rose-200 text-xs font-bold">
+            🔄 Reiniciar
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Barra de Progresso Geral -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+        <div class="flex justify-between items-center text-xs font-bold text-slate-600 mb-1.5">
+          <span>Progresso da Prova Objetiva</span>
+          <span id="overall-progress-text">0 de 60 respondidas (0%)</span>
+        </div>
+        <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+          <div id="overall-progress-bar" class="bg-blue-600 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+
+        <!-- Navegação por Bolinhas das Questões -->
+        <div class="mt-4 pt-4 border-t border-slate-100">
+          <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Grade Rápida de Questões:</div>
+          <div id="question-nav-container" class="flex flex-wrap gap-1.5 sm:gap-2 max-h-36 overflow-y-auto p-1">
+            <!-- Gerado via JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Card da Questão Atual -->
+      <div id="current-question-card" class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm">
+        <!-- Gerado dinamicamente pelo app.js -->
+      </div>
+
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- ABA 2: PROVA DISCURSIVA (ESTUDO DE CASO - ITEM 10.7) -->
+    <!-- ======================================================== -->
+    <div id="tab-discursiva" class="tab-content-section hidden space-y-6">
+      <div id="discursiva-content-container">
+        <!-- Gerado via JavaScript -->
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- ABA 3: FOLHA DE RESPOSTAS ÓPTICA VIRTUAL -->
+    <!-- ======================================================== -->
+    <div id="tab-gabarito" class="tab-content-section hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-4 mb-6 border-b border-slate-200">
+          <div>
+            <h2 class="text-xl font-bold text-slate-900">
+              Cartão de Respostas Óptico Virtual (60 Questões)
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-500 mt-1">
+              Simulação idêntica à folha de leitura óptica da FGV descrita no subitem 10.10 do edital.
+            </p>
+          </div>
+          <button onclick="window.print()" class="px-4 py-2 text-xs font-bold rounded-xl border border-slate-300 hover:bg-slate-50 flex items-center gap-1.5 text-slate-700">
+            🖨️ Imprimir Gabarito
+          </button>
+        </div>
+
+        <!-- Grade de Bolinhas em Colunas Responsivas -->
+        <div id="folha-respostas-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <!-- Gerado via JS -->
+        </div>
+
+        <div class="mt-8 p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+          <strong>Regras do Edital (Subitem 10.9 a 10.11):</strong> Será atribuída nota ZERO à questão com rasura ou com mais de uma bolha assinalada. Preencha integralmente o círculo.
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- ABA 4: RAIO-X & PEGADINHAS FGV -->
+    <!-- ======================================================== -->
+    <div id="tab-pegadinhas" class="tab-content-section hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm">
+        <div class="pb-4 mb-6 border-b border-slate-200">
+          <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+            Inteligência de Concursos
+          </span>
+          <h2 class="text-2xl font-black text-slate-900 mt-2">
+            Raio-X das Armadilhas e Pegadinhas da FGV em Banco de Dados
+          </h2>
+          <p class="text-sm text-slate-600 mt-1 leading-relaxed">
+            A FGV Conhecimento é conhecida por questões conceituais profundas, textos longos e sutilezas técnicas propositais. Conheça as principais pegadinhas aplicadas nos últimos certames de Tribunais de Justiça.
+          </p>
+        </div>
+
+        <div id="pegadinhas-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+          <!-- Gerado via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- ABA NOVA: PROJEÇÃO DE NOTAS DE CORTE & POSIÇÕES (TOP 1 AO 50) -->
+    <!-- ======================================================== -->
+    <div id="tab-projecao" class="tab-content-section hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-8">
+        
+        <!-- Cabeçalho da Projeção -->
+        <div class="pb-6 border-b border-slate-200">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <span class="px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800">
+                Estatística & Projeção Competitiva
+              </span>
+              <h2 class="text-2xl sm:text-3xl font-black text-slate-900 mt-2">
+                Projeção de Notas de Corte: Do 1º ao 50º Lugar
+              </h2>
+            </div>
+            <div class="text-right">
+              <span class="inline-block px-3 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs font-bold text-blue-900">
+                Cargo 7: Analista - Banco de Dados
+              </span>
+            </div>
+          </div>
+          <p class="text-sm text-slate-600 mt-2 leading-relaxed">
+            Projeção elaborada com base no histórico recente de notas de corte da <strong>FGV em Tribunais de Justiça e Tribunais Superiores</strong>, considerando a estrutura do Edital nº 01/2026: <strong>60 questões objetivas (peso 1)</strong> + <strong>1 Estudo de Caso discursivo (40 pontos)</strong>, com limite de <strong>até a 50ª discursiva corrigida</strong> (item 10.13).
+          </p>
+        </div>
+
+        <!-- SIMULADOR E CALCULADORA INTERATIVA DE POSIÇÃO -->
+        <div class="p-6 rounded-2xl bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 text-white shadow-lg">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div>
+              <span class="text-xs font-bold uppercase tracking-wider text-blue-300">Simulador Dinâmico de Posição</span>
+              <h3 class="text-xl font-black text-white mt-0.5">Calcule em Qual Posição Você Ficaria</h3>
+            </div>
+            <button onclick="puxarNotaSimuladoParaCalculadora()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-sm">
+              <span>📥</span> Puxar Nota do Meu Simulado
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-center">
+            
+            <!-- Controle Nota Objetiva -->
+            <div class="bg-white/10 p-4 rounded-xl border border-white/10 backdrop-blur-xs">
+              <label class="block text-xs font-bold uppercase text-blue-200 mb-2">
+                Sua Nota Objetiva (0 a 60 pontos):
+              </label>
+              <div class="flex items-center gap-3">
+                <input type="range" id="sim-input-obj" min="0" max="60" value="45" oninput="atualizarCalculadoraProjecao()" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-400">
+                <span id="sim-val-obj" class="text-2xl font-black w-12 text-right text-blue-300">45</span>
+              </div>
+              <div class="text-[11px] text-slate-300 mt-1.5 flex justify-between">
+                <span>Corte Mínimo: 36</span>
+                <span>Máx: 60</span>
+              </div>
+            </div>
+
+            <!-- Controle Nota Discursiva -->
+            <div class="bg-white/10 p-4 rounded-xl border border-white/10 backdrop-blur-xs">
+              <label class="block text-xs font-bold uppercase text-blue-200 mb-2">
+                Sua Nota Discursiva Estimada (0 a 40 pontos):
+              </label>
+              <div class="flex items-center gap-3">
+                <input type="range" id="sim-input-disc" min="0" max="40" value="32" oninput="atualizarCalculadoraProjecao()" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-400">
+                <span id="sim-val-disc" class="text-2xl font-black w-12 text-right text-emerald-300">32</span>
+              </div>
+              <div class="text-[11px] text-slate-300 mt-1.5 flex justify-between">
+                <span>Corte Mínimo: 24</span>
+                <span>Máx: 40</span>
+              </div>
+            </div>
+
+            <!-- Resultado da Projeção -->
+            <div id="sim-card-resultado" class="bg-white text-slate-900 p-5 rounded-xl shadow-md border-2 border-blue-400">
+              <div class="text-xs uppercase font-bold text-slate-500">Nota Final Total Projetada</div>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span id="sim-val-total" class="text-4xl font-black text-blue-700">77,0</span>
+                <span class="text-sm font-bold text-slate-400">/ 100 pontos</span>
+              </div>
+              <div id="sim-faixa-badge" class="mt-2.5 inline-block px-3 py-1 rounded-full text-xs font-black bg-indigo-100 text-indigo-800">
+                Posição Estimada: Top 10 (4º ao 10º Lugar)
+              </div>
+              <p id="sim-analise-texto" class="text-xs text-slate-600 mt-2 leading-relaxed">
+                Excelente pontuação! Com 77 pontos você se posiciona na cabeça do Cadastro de Reserva, com chance altíssima de convocação ao longo dos 2 anos do certame.
+              </p>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- QUADRO COMPARATIVO DAS 5 FAIXAS DE CORTE -->
+        <div>
+          <h3 class="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
+            <span>🏆</span> Quadro de Projeção Detalhado por Posição
+          </h3>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            
+            <!-- CARD 1: 1º Lugar -->
+            <div class="p-5 rounded-2xl bg-gradient-to-b from-amber-50 to-white border-2 border-amber-300 shadow-sm relative flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-2xl">🥇</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-200 text-amber-900 uppercase">Vaga Imediata</span>
+                </div>
+                <h4 class="text-lg font-black text-slate-900">1º Lugar</h4>
+                <div class="text-xs text-amber-700 font-bold mb-3">Vaga Direta Ampla Concorrência</div>
+
+                <div class="space-y-2 py-3 border-y border-amber-200/60 text-xs">
+                  <div class="flex justify-between">
+                    <span class="text-slate-600">Nota Objetiva:</span>
+                    <strong class="text-slate-900 font-mono font-bold">50 a 53 pts</strong>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-600">Nota Discursiva:</span>
+                    <strong class="text-slate-900 font-mono font-bold">36 a 39 pts</strong>
+                  </div>
+                  <div class="flex justify-between text-sm pt-1 border-t border-amber-100">
+                    <span class="font-bold text-amber-900">Nota Final:</span>
+                    <strong class="text-amber-700 font-mono font-black text-base">88 a 92 pts</strong>
+                  </div>
+                </div>
+
+                <p class="text-[11px] text-slate-600 mt-3 leading-relaxed">
+                  Exige precisão cirúrgica: cravar 36+ de 40 nas específicas de BD e discursiva completa citando termos canônicos (MVCC, WAL, PITR, EXPLAIN, RBAC).
+                </p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 text-[11px] font-bold text-emerald-700">
+                Status: Nomeação Imediata
+              </div>
+            </div>
+
+            <!-- CARD 2: 2º e 3º Lugar -->
+            <div class="p-5 rounded-2xl bg-gradient-to-b from-slate-50 to-white border border-slate-300 shadow-sm flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-2xl">🥈🥉</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-blue-900 uppercase">Pódio / CR</span>
+                </div>
+                <h4 class="text-lg font-black text-slate-900">2º e 3º Lugar</h4>
+                <div class="text-xs text-blue-700 font-bold mb-3">Primeiros da Lista de Espera</div>
+
+                <div class="space-y-2 py-3 border-y border-slate-200 text-xs">
+                  <div class="flex justify-between">
+                    <span class="text-slate-600">Nota Objetiva:</span>
+                    <strong class="text-slate-900 font-mono font-bold">47 a 50 pts</strong>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-600">Nota Discursiva:</span>
+                    <strong class="text-slate-900 font-mono font-bold">34 a 37 pts</strong>
+                  </div>
+                  <div class="flex justify-between text-sm pt-1 border-t border-slate-100">
+                    <span class="font-bold text-blue-900">Nota Final:</span>
+                    <strong class="text-blue-700 font-mono font-black text-base">83 a 87 pts</strong>
+                  </div>
+                </div>
+
+                <p class="text-[11px] text-slate-600 mt-3 leading-relaxed">
+                  Chamada quase certa durante os primeiros 12 a 24 meses do certame devido à rotatividade natural e aposentadorias no tribunal.
+                </p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 text-[11px] font-bold text-blue-700">
+                Status: Convocação Muito Provável
+              </div>
+            </div>
+
+            <!-- CARD 3: Top 10 -->
+            <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between hover:border-blue-400 transition-colors">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-2xl">🔟</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-900 uppercase">Cabeça CR</span>
+                </div>
+                <h4 class="text-lg font-black text-slate-900">Top 10</h4>
+                <div class="text-xs text-indigo-700 font-bold mb-3">4º ao 10º Colocado</div>
+
+                <div class="space-y-2 py-3 border-y border-slate-200 text-xs">
+                  <div class="flex justify-between">
+                    <span class="text-slate-600">Nota Objetiva:</span>
+                    <strong class="text-slate-900 font-mono font-bold">44 a 47 pts</strong>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-600">Nota Discursiva:</span>
+                    <strong class="text-slate-900 font-mono font-bold">31 a 34 pts</strong>
+                  </div>
+                  <div class="flex justify-between text-sm pt-1 border-t border-slate-100">
+                    <span class="font-bold text-indigo-900">Nota Final:</span>
+                    <strong class="text-indigo-700 font-mono font-black text-base">76 a 81 pts</strong>
+                  </div>
+                </div>
+
+                <p class="text-[11px] text-slate-600 mt-3 leading-relaxed">
+                  Forte expectativa de nomeação ao longo da validade do concurso (2 anos + 2 prorrogáveis) com criação de novas varas e expansão de TI.
+                </p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 text-[11px] font-bold text-indigo-700">
+                Status: Alta Expectativa de Chamada
+              </div>
+            </div>
+
+            <!-- CARD 4: Top 25 -->
+            <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between hover:border-blue-400 transition-colors">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-2xl">🎯</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-100 text-slate-800 uppercase">Zona de Reserva</span>
+                </div>
+                <h4 class="text-lg font-black text-slate-900">Top 25</h4>
+                <div class="text-xs text-slate-500 font-bold mb-3">11º ao 25º Colocado</div>
+
+                <div class="space-y-2 py-3 border-y border-slate-200 text-xs">
+                  <div class="flex justify-between">
+                    <span class="text-slate-600">Nota Objetiva:</span>
+                    <strong class="text-slate-900 font-mono font-bold">41 a 44 pts</strong>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-600">Nota Discursiva:</span>
+                    <strong class="text-slate-900 font-mono font-bold">28 a 31 pts</strong>
+                  </div>
+                  <div class="flex justify-between text-sm pt-1 border-t border-slate-100">
+                    <span class="font-bold text-slate-800">Nota Final:</span>
+                    <strong class="text-slate-700 font-mono font-black text-base">70 a 75 pts</strong>
+                  </div>
+                </div>
+
+                <p class="text-[11px] text-slate-600 mt-3 leading-relaxed">
+                  Primeira metade da lista de discursivas corrigidas. Entra em lista homologada ativa, ficando apto para aproveitamento institucional em comarcas do interior.
+                </p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 text-[11px] font-bold text-slate-600">
+                Status: Habilitado no CR Ativo
+              </div>
+            </div>
+
+            <!-- CARD 5: Top 50 -->
+            <div class="p-5 rounded-2xl bg-gradient-to-b from-rose-50/40 to-white border border-rose-200 shadow-sm flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-2xl">🛡️</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 uppercase">Corte Discursiva</span>
+                </div>
+                <h4 class="text-lg font-black text-slate-900">Top 50</h4>
+                <div class="text-xs text-rose-600 font-bold mb-3">Linha de Sobrevivência (Item 10.13)</div>
+
+                <div class="space-y-2 py-3 border-y border-rose-100 text-xs">
+                  <div class="flex justify-between">
+                    <span class="text-slate-600">Nota Objetiva:</span>
+                    <strong class="text-slate-900 font-mono font-bold">38 a 41 pts</strong>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-600">Nota Discursiva:</span>
+                    <strong class="text-slate-900 font-mono font-bold">≥ 24 pts</strong>
+                  </div>
+                  <div class="flex justify-between text-sm pt-1 border-t border-rose-100">
+                    <span class="font-bold text-rose-900">Nota Final:</span>
+                    <strong class="text-rose-700 font-mono font-black text-base">64 a 69 pts</strong>
+                  </div>
+                </div>
+
+                <p class="text-[11px] text-slate-600 mt-3 leading-relaxed">
+                  O edital do TJPB corrige exatamente <strong>até a 50ª discursiva</strong> para Banco de Dados. Quem não atingir esse corte na objetiva é sumariamente eliminado do concurso.
+                </p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 text-[11px] font-bold text-rose-700">
+                Status: Corte Mínimo de Correção
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- PLANILHA DE METAS TÁTICAS POR DISCIPLINA -->
+        <div class="pt-6 border-t border-slate-200">
+          <h3 class="text-xl font-black text-slate-900 mb-3 flex items-center gap-2">
+            <span>🎯</span> Matriz de Metas de Acertos por Disciplina
+          </h3>
+          <p class="text-xs sm:text-sm text-slate-600 mb-4">
+            Veja como você deve calibrar seus estudos para atingir o objetivo exato de pontuação em cada módulo da prova objetiva:
+          </p>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs sm:text-sm text-left border-collapse border border-slate-200 rounded-xl overflow-hidden">
+              <thead class="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[11px]">
+                <tr>
+                  <th class="p-3 border-b border-slate-200">Faixa / Objetivo</th>
+                  <th class="p-3 border-b border-slate-200">Língua Portuguesa (10 Q)</th>
+                  <th class="p-3 border-b border-slate-200">Raciocínio Lógico (10 Q)</th>
+                  <th class="p-3 border-b border-slate-200">Específicas de BD (40 Q)</th>
+                  <th class="p-3 border-b border-slate-200">Objetiva Total (60 Q)</th>
+                  <th class="p-3 border-b border-slate-200">Meta na Discursiva (40 pts)</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200">
+                <tr class="bg-amber-50/50 hover:bg-amber-50 font-medium">
+                  <td class="p-3 font-bold text-amber-900 flex items-center gap-1.5">🥇 1º Lugar (Vaga Imediata)</td>
+                  <td class="p-3">7 a 8 acertos (75%)</td>
+                  <td class="p-3">8 a 9 acertos (85%)</td>
+                  <td class="p-3 font-bold text-blue-700">35 a 37 acertos (90%)</td>
+                  <td class="p-3 font-bold">50 a 53 pontos</td>
+                  <td class="p-3 font-bold text-emerald-700">36 a 39 pontos</td>
+                </tr>
+                <tr class="bg-blue-50/40 hover:bg-blue-50 font-medium">
+                  <td class="p-3 font-bold text-blue-900 flex items-center gap-1.5">🥈 2º e 3º Lugar (Pódio)</td>
+                  <td class="p-3">7 acertos (70%)</td>
+                  <td class="p-3">8 acertos (80%)</td>
+                  <td class="p-3 font-bold text-blue-700">33 a 35 acertos (83%)</td>
+                  <td class="p-3 font-bold">47 a 50 pontos</td>
+                  <td class="p-3 font-bold text-emerald-700">34 a 37 pontos</td>
+                </tr>
+                <tr class="hover:bg-slate-50 font-medium">
+                  <td class="p-3 font-bold text-indigo-900 flex items-center gap-1.5">🔟 Top 10 (Cabeça do CR)</td>
+                  <td class="p-3">6 a 7 acertos (65%)</td>
+                  <td class="p-3">7 a 8 acertos (75%)</td>
+                  <td class="p-3 font-bold text-blue-700">31 a 33 acertos (78%)</td>
+                  <td class="p-3 font-bold">44 a 47 pontos</td>
+                  <td class="p-3 font-bold text-emerald-700">31 a 34 pontos</td>
+                </tr>
+                <tr class="hover:bg-slate-50 font-medium">
+                  <td class="p-3 font-bold text-slate-800 flex items-center gap-1.5">🎯 Top 25 (Primeira Metade)</td>
+                  <td class="p-3">6 acertos (60%)</td>
+                  <td class="p-3">6 a 7 acertos (65%)</td>
+                  <td class="p-3 font-bold text-blue-700">29 a 31 acertos (73%)</td>
+                  <td class="p-3 font-bold">41 a 44 pontos</td>
+                  <td class="p-3 font-bold text-emerald-700">28 a 31 pontos</td>
+                </tr>
+                <tr class="bg-rose-50/30 hover:bg-rose-50/50 font-medium">
+                  <td class="p-3 font-bold text-rose-900 flex items-center gap-1.5">🛡️ Top 50 (Corte Discursiva)</td>
+                  <td class="p-3">5 a 6 acertos (55%)</td>
+                  <td class="p-3">6 acertos (60%)</td>
+                  <td class="p-3 font-bold text-blue-700">27 a 29 acertos (68%)</td>
+                  <td class="p-3 font-bold">38 a 41 pontos</td>
+                  <td class="p-3 font-bold text-rose-700">≥ 24 pontos (60%)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- INSIGHTS ESTRATÉGICOS DA BANCA FGV -->
+        <div class="p-5 rounded-2xl bg-amber-50/80 border border-amber-200">
+          <div class="text-xs font-bold uppercase tracking-wider text-amber-800 mb-2 flex items-center gap-2">
+            <span>💡</span> Segredo Estratégico da FGV para Analista de Banco de Dados:
+          </div>
+          <ul class="text-xs sm:text-sm text-amber-950 space-y-1.5 list-disc pl-5 leading-relaxed">
+            <li><strong>Português FGV nivela por baixo:</strong> A média dos aprovados em concursos da FGV em Português costuma girar entre 6 e 7 de 10. Dificilmente alguém faz 9 ou 10. Não se desespere em Português; garanta 6 a 7 acertos para não ser eliminado.</li>
+            <li><strong>O diferencial real está no Módulo II (Específicas de BD):</strong> São 40 questões (66% da prova objetiva) e a Discursiva de 40 pontos versará 100% sobre esse conteúdo. Um candidato que acerta 35+ na objetiva de BD já tem bagagem para cravar 35+ na discursiva, saltando direto para o topo!</li>
+            <li><strong>A Discursiva decide o 1º Lugar:</strong> Entre os 5 primeiros da objetiva, a diferença costuma ser de apenas 2 a 3 pontos. Uma discursiva nota 38 vs uma nota 30 inverte completamente a classificação final!</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- ABA 5: DIAGNÓSTICO INTELIGENTE & PLANO DE ESTUDOS -->
+    <!-- ======================================================== -->
+    <div id="tab-diagnostico" class="tab-content-section hidden space-y-6">
+      <div id="diagnostico-results-container">
+        <div class="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+          <span class="text-4xl">📊</span>
+          <h3 class="text-lg font-bold text-slate-800 mt-3">Você ainda não finalizou a prova</h3>
+          <p class="text-sm text-slate-500 max-w-md mx-auto mt-1 mb-5">
+            Responda as questões do simulado e clique em "Finalizar Prova" para gerar a análise completa de erros, acertos e sua trilha personalizada de reforço.
+          </p>
+          <button onclick="finalizarSimulado()" class="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700">
+            Gerar Diagnóstico com as Respostas Atuais
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- ABA 6: RESUMO DO EDITAL TJPB 2026/2027 -->
+    <!-- ======================================================== -->
+    <div id="tab-edital" class="tab-content-section hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+        <div class="pb-4 border-b border-slate-200">
+          <span class="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+            Síntese do Certame
+          </span>
+          <h2 class="text-2xl font-black text-slate-900 mt-2">
+            Edital nº 01/2026 TJPB - Cargo 7: Analista Judiciário (Banco de Dados)
+          </h2>
+          <p class="text-sm text-slate-600 mt-1">
+            Informações essenciais consolidadas diretamente das 55 páginas do edital oficial.
+          </p>
+        </div>
+
+        <!-- Remuneração e Benefícios -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="p-4 rounded-xl bg-blue-50/70 border border-blue-200">
+            <div class="text-xs font-bold uppercase text-blue-800">Vencimento Básico</div>
+            <div class="text-2xl font-black text-blue-950 mt-1">R$ 7.526,14</div>
+            <div class="text-xs text-blue-700 mt-0.5">30 horas semanais</div>
+          </div>
+          <div class="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200">
+            <div class="text-xs font-bold uppercase text-emerald-800">Auxílio Alimentação</div>
+            <div class="text-2xl font-black text-emerald-950 mt-1">R$ 2.200,00</div>
+            <div class="text-xs text-emerald-700 mt-0.5">Verba indenizatória</div>
+          </div>
+          <div class="p-4 rounded-xl bg-purple-50/70 border border-purple-200">
+            <div class="text-xs font-bold uppercase text-purple-800">Auxílio Saúde</div>
+            <div class="text-2xl font-black text-purple-950 mt-1">R$ 1.800,00</div>
+            <div class="text-xs text-purple-700 mt-0.5">Verba indenizatória</div>
+          </div>
+          <div class="p-4 rounded-xl bg-amber-50/70 border border-amber-200">
+            <div class="text-xs font-bold uppercase text-amber-800">Remuneração Inicial Total</div>
+            <div class="text-2xl font-black text-amber-950 mt-1">R$ 11.526,14</div>
+            <div class="text-xs text-amber-700 mt-0.5">Vencimento + Auxílios</div>
+          </div>
+        </div>
+
+        <!-- Estrutura da Prova e Critérios de Aprovação -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 mb-3">📋 Estrutura da Prova (Item 10)</h3>
+            <ul class="text-sm text-slate-700 space-y-2">
+              <li class="flex items-start gap-2">
+                <span class="text-blue-600 font-bold">•</span>
+                <span><strong>Data da Prova:</strong> 24 de janeiro de 2027 (13h às 18h - 5 horas de duração total).</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="text-blue-600 font-bold">•</span>
+                <span><strong>Fechamento dos Portões:</strong> 12h30 (30 minutos antes do início).</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="text-blue-600 font-bold">•</span>
+                <span><strong>Prova Objetiva:</strong> 60 questões (10 Português + 10 RLM + 40 Específicas de BD/TI).</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="text-blue-600 font-bold">•</span>
+                <span><strong>Prova Discursiva:</strong> 1 Estudo de Caso (até 30 linhas, valendo 40 pontos).</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="text-blue-600 font-bold">•</span>
+                <span><strong>Discursivas Corrigidas:</strong> Até a 50ª posição para o cargo de Banco de Dados.</span>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 class="text-base font-bold text-slate-900 mb-3">⚖️ Critérios de Habilitação & Corte</h3>
+            <ul class="text-sm text-slate-700 space-y-2">
+              <li class="flex items-start gap-2">
+                <span class="text-emerald-600 font-bold">✓</span>
+                <span><strong>Nota Mínima Objetiva (Ampla):</strong> 60% de aproveitamento (pelo menos 36 acertos).</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="text-emerald-600 font-bold">✓</span>
+                <span><strong>Nota Mínima Objetiva (Cotas PPIQ/PcD):</strong> 20% inferior à nota mínima da ampla (29 pontos).</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="text-emerald-600 font-bold">✓</span>
+                <span><strong>Nota Mínima Discursiva:</strong> 60% da pontuação total (24 pontos de 40 possíveis).</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="text-rose-600 font-bold">✕</span>
+                <span><strong>Tempo Mínimo na Sala:</strong> Obrigatoriamente 2 horas para não ser eliminado. Caderno só pode ser levado nos últimos 30 minutos.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Atribuições do Cargo de Banco de Dados (Anexo II) -->
+        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+          <div class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">
+            Atribuições Oficiais do Cargo (Anexo II do Edital - Pág 48):
+          </div>
+          <p class="text-xs sm:text-sm text-slate-700 leading-relaxed">
+            "Definir estruturas de dados e ambientes de banco de dados, baseando-se nas diretrizes tecnológicas e nas metodologias adotadas pelo Tribunal de Justiça; monitorar o funcionamento das estruturas e ambientes de banco de dados, para garantir a disponibilidade de uso e a otimização da performance do ambiente, bem como assistir a equipe de desenvolvimento na implantação e na manutenção de sistemas, quanto à utilização dos recursos de banco de dados."
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- RODAPÉ -->
+  <footer class="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500 no-print">
+    <div class="max-w-7xl mx-auto px-4">
+      <p class="font-medium text-slate-700">Simulador Web de Prova TJPB 2026/2027 • Especialidade: Analista de Banco de Dados</p>
+      <p class="mt-1">Desenvolvido com base integral no Edital nº 01/2026 do Tribunal de Justiça do Estado da Paraíba (Banca FGV Conhecimento).</p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="questions.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

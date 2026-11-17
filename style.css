@@ -1,0 +1,118 @@
+/* Estilos Complementares para o Simulado TJPB - FGV Conhecimento */
+
+:root {
+  --primary: #1e3a8a;
+  --primary-light: #3b82f6;
+  --accent: #d97706;
+  --success: #10b981;
+  --danger: #ef4444;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background-color: #f8fafc;
+  color: #1e293b;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Animações suaves */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Folha de Respostas Óptica Virtual */
+.gabarito-bolha {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #94a3b8;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.gabarito-bolha:hover {
+  border-color: #2563eb;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+}
+
+.gabarito-bolha.selected {
+  background-color: #1e3a8a;
+  border-color: #1e3a8a;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(30, 58, 138, 0.4);
+}
+
+.gabarito-bolha.correct {
+  background-color: #10b981 !important;
+  border-color: #059669 !important;
+  color: white !important;
+}
+
+.gabarito-bolha.incorrect {
+  background-color: #ef4444 !important;
+  border-color: #dc2626 !important;
+  color: white !important;
+}
+
+/* Linhas da Folha Discursiva Padrão FGV */
+.linha-pauta {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 6px 4px;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.num-linha {
+  width: 32px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: bold;
+  user-select: none;
+}
+
+/* Modo Impressão */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .card-question {
+    break-inside: avoid;
+    border-bottom: 1px dashed #ccc;
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+  }
+}
